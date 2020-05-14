@@ -3,6 +3,8 @@ package ctrsigcheck
 import (
 	"bytes"
 	"crypto"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rsa"
 	"encoding/binary"
 	"encoding/hex"
@@ -13,12 +15,17 @@ import (
 	"github.com/connesc/ctrsigcheck/reader"
 )
 
+type TitleKey struct {
+	Encrypted string
+	Decrypted string
+}
+
 type TicketInfo struct {
 	Legit        bool
 	TicketID     string
 	ConsoleID    string
 	TitleID      string
-	TitleKey     string
+	TitleKey     TitleKey
 	CertsTrailer bool
 }
 
@@ -51,10 +58,31 @@ func CheckTicket(input io.Reader) (*TicketInfo, error) {
 		legit = rsa.VerifyPKCS1v15(&Certs.Retail.Ticket.PublicKey, crypto.SHA256, sha256Hash(data), signature) == nil
 	}
 
-	titleKey := strings.ToUpper(hex.EncodeToString(data[0x7f:0x8f]))
-	ticketID := strings.ToUpper(hex.EncodeToString(data[0x90:0x98]))
-	consoleID := strings.ToUpper(hex.EncodeToString(data[0x98:0x9c]))
-	titleID := strings.ToUpper(hex.EncodeToString(data[0x9c:0xa4]))
+	ticketID := data[0x90:0x98]
+	consoleID := data[0x98:0x9c]
+	titleID := data[0x9c:0xa4]
+
+	encryptedTitleKey := data[0x7f:0x8f]
+
+	var commonKeyIndex uint8
+	err = binary.Read(bytes.NewReader(data[0xb1:]), binary.BigEndian, &commonKeyIndex)
+	if err != nil {
+		return nil, fmt.Errorf("ticket: failed to parse common key index: %w", err)
+	}
+	if int(commonKeyIndex) >= len(commonKeys) {
+		return nil, fmt.Errorf("ticket: common key index must be less than %d, got %d", len(commonKeys), commonKeyIndex)
+	}
+
+	titleKeyCipher, err := aes.NewCipher(commonKeys[commonKeyIndex])
+	if err != nil {
+		return nil, fmt.Errorf("ticket: failed to initialize title key decryption: %w", err)
+	}
+	titleKeyIV := make([]byte, 0x10)
+	copy(titleKeyIV, titleID)
+	titleKeyDecrypter := cipher.NewCBCDecrypter(titleKeyCipher, titleKeyIV)
+
+	decryptedTitleKey := make([]byte, 0x10)
+	titleKeyDecrypter.CryptBlocks(decryptedTitleKey, encryptedTitleKey)
 
 	certsTrailer := true
 	certs := make([]byte, len(Certs.Retail.CA.Raw)+len(Certs.Retail.Ticket.Raw))
@@ -86,11 +114,14 @@ func CheckTicket(input io.Reader) (*TicketInfo, error) {
 	}
 
 	return &TicketInfo{
-		Legit:        legit,
-		TicketID:     ticketID,
-		ConsoleID:    consoleID,
-		TitleID:      titleID,
-		TitleKey:     titleKey,
+		Legit:     legit,
+		TicketID:  strings.ToUpper(hex.EncodeToString(ticketID)),
+		ConsoleID: strings.ToUpper(hex.EncodeToString(consoleID)),
+		TitleID:   strings.ToUpper(hex.EncodeToString(titleID)),
+		TitleKey: TitleKey{
+			Encrypted: strings.ToUpper(hex.EncodeToString(encryptedTitleKey)),
+			Decrypted: strings.ToUpper(hex.EncodeToString(decryptedTitleKey)),
+		},
 		CertsTrailer: certsTrailer,
 	}, nil
 }
