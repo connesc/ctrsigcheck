@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+
+	"github.com/connesc/ctrsigcheck/reader"
 )
 
 type CIAInfo struct {
@@ -13,21 +15,23 @@ type CIAInfo struct {
 	TMD    TMDInfo
 }
 
-func CheckCIA(cia io.ReaderAt) (*CIAInfo, error) {
+func CheckCIA(input io.Reader) (*CIAInfo, error) {
+	inputReader := reader.New(input)
+
+	header := make([]byte, 0x2020)
+	_, err := io.ReadFull(inputReader, header)
+	if err != nil {
+		return nil, err
+	}
+
 	var headerLen uint32
-	err := binaryReadAt(cia, 0, binary.LittleEndian, &headerLen)
+	err = binary.Read(bytes.NewReader(header), binary.LittleEndian, &headerLen)
 	if err != nil {
 		return nil, err
 	}
 
 	if headerLen != 0x2020 {
 		return nil, fmt.Errorf("cia: header length must be %d, got %d", 0x2020, headerLen)
-	}
-
-	header := make([]byte, headerLen)
-	_, err = cia.ReadAt(header, 0)
-	if err != nil {
-		return nil, err
 	}
 
 	var certsLen uint32
@@ -48,17 +52,18 @@ func CheckCIA(cia io.ReaderAt) (*CIAInfo, error) {
 		return nil, err
 	}
 
-	certsOffset := ((int64(headerLen) + 0x39) / 0x40) * 0x40
-	ticketOffset := ((int64(certsOffset) + int64(certsLen) + 0x39) / 0x40) * 0x40
-	tmdOffset := ((int64(ticketOffset) + int64(ticketLen) + 0x39) / 0x40) * 0x40
-
 	expectedCertsLen := uint32(len(Certs.Retail.CA.Raw) + len(Certs.Retail.Ticket.Raw) + len(Certs.Retail.TMD.Raw))
 	if certsLen != expectedCertsLen {
 		return nil, fmt.Errorf("cia: certs length must be %d, got %d", expectedCertsLen, certsLen)
 	}
 
+	err = inputReader.Discard((0x40 - (inputReader.Offset() % 0x40)) % 0x40)
+	if err != nil {
+		return nil, err
+	}
+
 	certs := make([]byte, certsLen)
-	_, err = cia.ReadAt(certs, certsOffset)
+	_, err = io.ReadFull(inputReader, certs)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +83,12 @@ func CheckCIA(cia io.ReaderAt) (*CIAInfo, error) {
 		return nil, fmt.Errorf("cia: invalid TMD certificate")
 	}
 
-	ticketInfo, err := CheckTicket(io.NewSectionReader(cia, ticketOffset, int64(ticketLen)), ticketLen)
+	err = inputReader.Discard((0x40 - (inputReader.Offset() % 0x40)) % 0x40)
+	if err != nil {
+		return nil, err
+	}
+
+	ticketInfo, err := CheckTicket(io.LimitReader(inputReader, int64(ticketLen)))
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +97,12 @@ func CheckCIA(cia io.ReaderAt) (*CIAInfo, error) {
 		return nil, fmt.Errorf("cia: unexpected certs trailer in ticket")
 	}
 
-	tmdInfo, err := CheckTMD(io.NewSectionReader(cia, tmdOffset, int64(tmdLen)), tmdLen)
+	err = inputReader.Discard((0x40 - (inputReader.Offset() % 0x40)) % 0x40)
+	if err != nil {
+		return nil, err
+	}
+
+	tmdInfo, err := CheckTMD(io.LimitReader(inputReader, int64(tmdLen)))
 	if err != nil {
 		return nil, err
 	}

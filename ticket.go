@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/connesc/ctrsigcheck/reader"
 )
 
 type TicketInfo struct {
@@ -20,41 +22,27 @@ type TicketInfo struct {
 	CertsTrailer bool
 }
 
-func CheckTicket(ticket io.ReaderAt, totalLen uint32) (*TicketInfo, error) {
-	ticketLen := uint32(0x350)
-	certsTrailerLen := uint32(len(Certs.Retail.CA.Raw) + len(Certs.Retail.Ticket.Raw))
+func CheckTicket(input io.Reader) (*TicketInfo, error) {
+	inputReader := reader.New(input)
 
-	var certsTrailer bool
-	switch totalLen {
-	case ticketLen:
-		certsTrailer = false
-	case ticketLen + certsTrailerLen:
-		certsTrailer = true
-	default:
-		return nil, fmt.Errorf("ticket: length must be either %d or %d, got %d", ticketLen, ticketLen+certsTrailerLen, totalLen)
+	ticket := make([]byte, 0x350)
+	_, err := io.ReadFull(inputReader, ticket)
+	if err != nil {
+		return nil, fmt.Errorf("ticket: failed to read ticket: %w", err)
 	}
 
 	var signatureType uint32
-	err := binaryReadAt(ticket, 0, binary.BigEndian, &signatureType)
+	err = binary.Read(bytes.NewReader(ticket), binary.BigEndian, &signatureType)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ticket: failed to parse signature type: %w", err)
 	}
 
 	if signatureType != 0x10004 {
 		return nil, fmt.Errorf("ticket: signature type must be 0x%08x, got 0x%08x", 0x10004, signatureType)
 	}
 
-	signature := make([]byte, 0x100)
-	_, err = ticket.ReadAt(signature, 0x4)
-	if err != nil {
-		return nil, err
-	}
-
-	data := make([]byte, 0x210)
-	_, err = ticket.ReadAt(data, 0x140)
-	if err != nil {
-		return nil, err
-	}
+	signature := ticket[0x4:0x104]
+	data := ticket[0x140:]
 
 	issuer := string(bytes.TrimRight(data[:0x40], "\x00"))
 	legit := issuer == fmt.Sprintf("Root-%s-%s", Certs.Retail.CA.Name, Certs.Retail.Ticket.Name)
@@ -68,13 +56,17 @@ func CheckTicket(ticket io.ReaderAt, totalLen uint32) (*TicketInfo, error) {
 	consoleID := strings.ToUpper(hex.EncodeToString(data[0x98:0x9c]))
 	titleID := strings.ToUpper(hex.EncodeToString(data[0x9c:0xa4]))
 
-	if certsTrailer {
-		certs := make([]byte, certsTrailerLen)
-		_, err = ticket.ReadAt(certs, int64(ticketLen))
-		if err != nil {
-			return nil, err
-		}
+	certsTrailer := true
+	certs := make([]byte, len(Certs.Retail.CA.Raw)+len(Certs.Retail.Ticket.Raw))
 
+	_, err = io.ReadFull(inputReader, certs)
+	if err == io.EOF {
+		certsTrailer = false
+	} else if err != nil {
+		return nil, fmt.Errorf("ticket: failed to read certs trailer: %w", err)
+	}
+
+	if certsTrailer {
 		ticketCertLen := len(Certs.Retail.Ticket.Raw)
 		if !bytes.Equal(certs[:ticketCertLen], Certs.Retail.Ticket.Raw) {
 			return nil, fmt.Errorf("ticket: invalid ticket certificate in trailer")
@@ -84,6 +76,13 @@ func CheckTicket(ticket io.ReaderAt, totalLen uint32) (*TicketInfo, error) {
 		if !bytes.Equal(certs[ticketCertLen:ticketCertLen+caCertLen], Certs.Retail.CA.Raw) {
 			return nil, fmt.Errorf("ticket: invalid CA certificate in trailer")
 		}
+	}
+
+	err = inputReader.Discard(1)
+	if err == nil {
+		return nil, fmt.Errorf("ticket: extraneous data after %d bytes", inputReader.Offset())
+	} else if err != io.EOF {
+		return nil, fmt.Errorf("ticket: failed to check extraneous data: %w", err)
 	}
 
 	return &TicketInfo{
