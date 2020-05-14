@@ -21,13 +21,13 @@ func CheckCIA(input io.Reader) (*CIAInfo, error) {
 	header := make([]byte, 0x2020)
 	_, err := io.ReadFull(inputReader, header)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cia: failed to read header: %w", err)
 	}
 
 	var headerLen uint32
 	err = binary.Read(bytes.NewReader(header), binary.LittleEndian, &headerLen)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cia: failed to parse header length: %w", err)
 	}
 
 	if headerLen != 0x2020 {
@@ -37,19 +37,19 @@ func CheckCIA(input io.Reader) (*CIAInfo, error) {
 	var certsLen uint32
 	err = binary.Read(bytes.NewReader(header[0x8:]), binary.LittleEndian, &certsLen)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cia: failed to parse certs length: %w", err)
 	}
 
 	var ticketLen uint32
 	err = binary.Read(bytes.NewReader(header[0xc:]), binary.LittleEndian, &ticketLen)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cia: failed to parse ticket length: %w", err)
 	}
 
 	var tmdLen uint32
 	err = binary.Read(bytes.NewReader(header[0x10:]), binary.LittleEndian, &tmdLen)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cia: failed to parse TMD length: %w", err)
 	}
 
 	expectedCertsLen := uint32(len(Certs.Retail.CA.Raw) + len(Certs.Retail.Ticket.Raw) + len(Certs.Retail.TMD.Raw))
@@ -59,13 +59,13 @@ func CheckCIA(input io.Reader) (*CIAInfo, error) {
 
 	err = inputReader.Discard((0x40 - (inputReader.Offset() % 0x40)) % 0x40)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cia: failed to skip TMD padding: %w", err)
 	}
 
 	certs := make([]byte, certsLen)
 	_, err = io.ReadFull(inputReader, certs)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cia: failed to read certs: %w", err)
 	}
 
 	caCertLen := len(Certs.Retail.CA.Raw)
@@ -85,7 +85,7 @@ func CheckCIA(input io.Reader) (*CIAInfo, error) {
 
 	err = inputReader.Discard((0x40 - (inputReader.Offset() % 0x40)) % 0x40)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cia: failed to skip certs padding: %w", err)
 	}
 
 	ticketInfo, err := CheckTicket(io.LimitReader(inputReader, int64(ticketLen)))
@@ -99,7 +99,7 @@ func CheckCIA(input io.Reader) (*CIAInfo, error) {
 
 	err = inputReader.Discard((0x40 - (inputReader.Offset() % 0x40)) % 0x40)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cia: failed to skip ticket padding: %w", err)
 	}
 
 	tmdInfo, err := CheckTMD(io.LimitReader(inputReader, int64(tmdLen)))
@@ -109,6 +109,11 @@ func CheckCIA(input io.Reader) (*CIAInfo, error) {
 
 	if tmdInfo.CertsTrailer {
 		return nil, fmt.Errorf("cia: unexpected certs trailer in TMD")
+	}
+
+	err = inputReader.Discard((0x40 - (inputReader.Offset() % 0x40)) % 0x40)
+	if err != nil {
+		return nil, fmt.Errorf("cia: failed to skip TMD padding: %w", err)
 	}
 
 	legit := ticketInfo.Legit && tmdInfo.Legit && ticketInfo.TitleID == tmdInfo.TitleID
