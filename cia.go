@@ -9,13 +9,13 @@ import (
 	"github.com/connesc/ctrsigcheck/reader"
 )
 
-type CIAInfo struct {
+type CIA struct {
 	Legit  bool
-	Ticket TicketInfo
-	TMD    TMDInfo
+	Ticket Ticket
+	TMD    TMD
 }
 
-func CheckCIA(input io.Reader) (*CIAInfo, error) {
+func CheckCIA(input io.Reader) (*CIA, error) {
 	inputReader := reader.New(input)
 
 	header := make([]byte, 0x2020)
@@ -69,12 +69,12 @@ func CheckCIA(input io.Reader) (*CIAInfo, error) {
 		return nil, fmt.Errorf("cia: failed to skip certs padding: %w", err)
 	}
 
-	ticketInfo, err := CheckTicket(io.LimitReader(inputReader, int64(ticketLen)))
+	ticket, err := CheckTicket(io.LimitReader(inputReader, int64(ticketLen)))
 	if err != nil {
 		return nil, err
 	}
 
-	if ticketInfo.CertsTrailer {
+	if ticket.CertsTrailer {
 		return nil, fmt.Errorf("cia: unexpected certs trailer in ticket")
 	}
 
@@ -83,12 +83,12 @@ func CheckCIA(input io.Reader) (*CIAInfo, error) {
 		return nil, fmt.Errorf("cia: failed to skip ticket padding: %w", err)
 	}
 
-	tmdInfo, err := CheckTMD(io.LimitReader(inputReader, int64(tmdLen)))
+	tmd, err := CheckTMD(io.LimitReader(inputReader, int64(tmdLen)))
 	if err != nil {
 		return nil, err
 	}
 
-	if tmdInfo.CertsTrailer {
+	if tmd.CertsTrailer {
 		return nil, fmt.Errorf("cia: unexpected certs trailer in TMD")
 	}
 
@@ -97,11 +97,11 @@ func CheckCIA(input io.Reader) (*CIAInfo, error) {
 		return nil, fmt.Errorf("cia: failed to skip TMD padding: %w", err)
 	}
 
-	legit := ticketInfo.Legit && tmdInfo.Legit && ticketInfo.TitleID == tmdInfo.TitleID
+	legit := ticket.Legit && tmd.Legit && ticket.TitleID == tmd.TitleID
 
-	return &CIAInfo{
+	return &CIA{
 		Legit:  legit,
-		Ticket: *ticketInfo,
-		TMD:    *tmdInfo,
+		Ticket: *ticket,
+		TMD:    *tmd,
 	}, nil
 }

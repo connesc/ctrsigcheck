@@ -18,7 +18,7 @@ type TitleKey struct {
 	Decrypted Hex
 }
 
-type TicketInfo struct {
+type Ticket struct {
 	Legit        bool
 	TicketID     Hex64
 	ConsoleID    Hex32
@@ -27,7 +27,7 @@ type TicketInfo struct {
 	CertsTrailer bool
 }
 
-func CheckTicket(input io.Reader) (*TicketInfo, error) {
+func CheckTicket(input io.Reader) (*Ticket, error) {
 	inputReader := reader.New(input)
 
 	ticket := make([]byte, 0x350)
@@ -102,7 +102,7 @@ func CheckTicket(input io.Reader) (*TicketInfo, error) {
 		return nil, fmt.Errorf("ticket: failed to check extraneous data: %w", err)
 	}
 
-	return &TicketInfo{
+	return &Ticket{
 		Legit:     legit,
 		TicketID:  Hex64(ticketID),
 		ConsoleID: Hex32(consoleID),

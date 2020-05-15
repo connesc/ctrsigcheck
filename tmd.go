@@ -11,7 +11,7 @@ import (
 	"github.com/connesc/ctrsigcheck/reader"
 )
 
-type TMDInfo struct {
+type TMD struct {
 	Legit        bool
 	TitleID      Hex64
 	TitleVersion uint16
@@ -27,7 +27,7 @@ type TMDContent struct {
 	Hash  Hex
 }
 
-func CheckTMD(input io.Reader) (*TMDInfo, error) {
+func CheckTMD(input io.Reader) (*TMD, error) {
 	inputReader := reader.New(input)
 
 	tmdHigh := make([]byte, 0xb04)
@@ -122,7 +122,7 @@ func CheckTMD(input io.Reader) (*TMDInfo, error) {
 		}
 	}
 
-	return &TMDInfo{
+	return &TMD{
 		Legit:        legit,
 		TitleID:      Hex64(titleID),
 		TitleVersion: titleVersion,
