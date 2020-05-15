@@ -45,11 +45,11 @@ func CheckTicket(input io.Reader) (*Ticket, error) {
 	data := ticket[0x140:]
 
 	issuer := string(bytes.TrimRight(data[:0x40], "\x00"))
-	legit := issuer == fmt.Sprintf("Root-%s-%s", Certs.Retail.CA.Name, Certs.Retail.Ticket.Name)
-
-	if legit {
-		legit = rsa.VerifyPKCS1v15(&Certs.Retail.Ticket.PublicKey, crypto.SHA256, sha256Hash(data), signature) == nil
+	if issuer != fmt.Sprintf("Root-%s-%s", Certs.Retail.CA.Name, Certs.Retail.Ticket.Name) {
+		return nil, fmt.Errorf("ticket: unexpected issuer: %s", issuer)
 	}
+
+	legit := rsa.VerifyPKCS1v15(&Certs.Retail.Ticket.PublicKey, crypto.SHA256, sha256Hash(data), signature) == nil
 
 	ticketID := binary.BigEndian.Uint64(data[0x90:])
 	consoleID := binary.BigEndian.Uint32(data[0x98:])

@@ -97,7 +97,11 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 		return nil, fmt.Errorf("cia: failed to skip TMD padding: %w", err)
 	}
 
-	legit := ticket.Legit && tmd.Legit && ticket.TitleID == tmd.TitleID
+	if ticket.TitleID != tmd.TitleID {
+		return nil, fmt.Errorf("cia: ticket and TMD have different title IDs: %s != %s", ticket.TitleID, tmd.TitleID)
+	}
+
+	legit := ticket.Legit && tmd.Legit
 
 	return &CIA{
 		Legit:  legit,

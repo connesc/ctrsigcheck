@@ -46,18 +46,18 @@ func CheckTMD(input io.Reader) (*TMD, error) {
 	contentInfoRecords := tmdHigh[0x204:]
 
 	issuer := string(bytes.TrimRight(header[:0x40], "\x00"))
-	legit := issuer == fmt.Sprintf("Root-%s-%s", Certs.Retail.CA.Name, Certs.Retail.TMD.Name)
-
-	if legit {
-		legit = rsa.VerifyPKCS1v15(&Certs.Retail.TMD.PublicKey, crypto.SHA256, sha256Hash(header), signature) == nil
+	if issuer != fmt.Sprintf("Root-%s-%s", Certs.Retail.CA.Name, Certs.Retail.TMD.Name) {
+		return nil, fmt.Errorf("tmd: unexpected issuer: %s", issuer)
 	}
+
+	legit := rsa.VerifyPKCS1v15(&Certs.Retail.TMD.PublicKey, crypto.SHA256, sha256Hash(header), signature) == nil
 
 	titleID := binary.BigEndian.Uint64(header[0x4c:])
 	titleVersion := binary.BigEndian.Uint16(header[0x9c:])
 	contentCount := binary.BigEndian.Uint16(header[0x9e:])
 
-	if legit {
-		legit = bytes.Equal(sha256Hash(contentInfoRecords), header[0xa4:0xc4])
+	if !bytes.Equal(sha256Hash(contentInfoRecords), header[0xa4:0xc4]) {
+		return nil, fmt.Errorf("tmd: invalid hash for content info records")
 	}
 
 	contentChunkRecords := make([]byte, 0x30*uint32(contentCount))
@@ -70,18 +70,19 @@ func CheckTMD(input io.Reader) (*TMD, error) {
 	for infoIndex := 0; infoIndex < 64; infoIndex++ {
 		infoRecord := contentInfoRecords[infoIndex*0x24 : (infoIndex+1)*0x24]
 
-		count := binary.BigEndian.Uint16(infoRecord[0x2:])
+		fisrtChunk := len(contents)
+		count := int(binary.BigEndian.Uint16(infoRecord[0x2:]))
 		if count == 0 {
 			continue
 		}
 
-		chunkRecords := contentChunkRecords[0x30*len(contents) : 0x30*(len(contents)+int(count))]
+		chunkRecords := contentChunkRecords[0x30*fisrtChunk : 0x30*(fisrtChunk+count)]
 
-		if legit {
-			legit = bytes.Equal(sha256Hash(chunkRecords), infoRecord[0x04:0x24])
+		if !bytes.Equal(sha256Hash(chunkRecords), infoRecord[0x04:0x24]) {
+			return nil, fmt.Errorf("tmd: invalid hash for content chunk records %d to %d", fisrtChunk, fisrtChunk+count-1)
 		}
 
-		for chunkIndex := 0; chunkIndex < int(count); chunkIndex++ {
+		for chunkIndex := 0; chunkIndex < count; chunkIndex++ {
 			chunkRecord := chunkRecords[chunkIndex*0x30 : (chunkIndex+1)*0x30]
 
 			contentID := binary.BigEndian.Uint32(chunkRecord)
