@@ -2,6 +2,9 @@ package ctrsigcheck
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -102,6 +105,42 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 	}
 
 	legit := ticket.Legit && tmd.Legit
+
+	for _, content := range tmd.Contents {
+		size := int64(content.Size)
+		if size < 0 {
+			return nil, fmt.Errorf("cia: invalid content size: %d", content.Size)
+		}
+
+		data := io.LimitReader(reader, size)
+		endOffset := reader.Offset() + size
+
+		if content.Type&0x1 == 1 {
+			contentCipher, err := aes.NewCipher(ticket.TitleKey.Decrypted)
+			if err != nil {
+				return nil, fmt.Errorf("cia: failed to initialize AES cipher for content %s: %w", content.ID, err)
+			}
+			if size%int64(contentCipher.BlockSize()) != 0 {
+				return nil, fmt.Errorf("cia: length of content %s must be a multiple of the AES block size: %d %% %d != 0", content.ID, size, contentCipher.BlockSize())
+			}
+			contentIV := make([]byte, contentCipher.BlockSize())
+			binary.BigEndian.PutUint16(contentIV, uint16(content.Index))
+			data = ctrutil.NewCipherReader(data, cipher.NewCBCDecrypter(contentCipher, contentIV))
+		}
+
+		hash := sha256.New()
+		_, err = io.Copy(hash, data)
+		if reader.Offset() < endOffset {
+			err = io.ErrUnexpectedEOF
+		}
+		if err != nil {
+			return nil, fmt.Errorf("cia: failed to read content %s: %w", content.ID, err)
+		}
+
+		if !bytes.Equal(hash.Sum(nil), content.Hash) {
+			return nil, fmt.Errorf("cia: invalid hash for content %s", content.ID)
+		}
+	}
 
 	return &CIA{
 		Legit:  legit,
