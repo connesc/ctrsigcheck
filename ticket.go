@@ -7,24 +7,22 @@ import (
 	"crypto/cipher"
 	"crypto/rsa"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/connesc/ctrsigcheck/reader"
 )
 
 type TitleKey struct {
-	Encrypted string
-	Decrypted string
+	Encrypted Hex
+	Decrypted Hex
 }
 
 type TicketInfo struct {
 	Legit        bool
-	TicketID     string
-	ConsoleID    string
-	TitleID      string
+	TicketID     Hex64
+	ConsoleID    Hex32
+	TitleID      Hex64
 	TitleKey     TitleKey
 	CertsTrailer bool
 }
@@ -38,12 +36,7 @@ func CheckTicket(input io.Reader) (*TicketInfo, error) {
 		return nil, fmt.Errorf("ticket: failed to read ticket: %w", err)
 	}
 
-	var signatureType uint32
-	err = binary.Read(bytes.NewReader(ticket), binary.BigEndian, &signatureType)
-	if err != nil {
-		return nil, fmt.Errorf("ticket: failed to parse signature type: %w", err)
-	}
-
+	signatureType := binary.BigEndian.Uint32(ticket)
 	if signatureType != 0x10004 {
 		return nil, fmt.Errorf("ticket: signature type must be 0x%08x, got 0x%08x", 0x10004, signatureType)
 	}
@@ -58,18 +51,14 @@ func CheckTicket(input io.Reader) (*TicketInfo, error) {
 		legit = rsa.VerifyPKCS1v15(&Certs.Retail.Ticket.PublicKey, crypto.SHA256, sha256Hash(data), signature) == nil
 	}
 
-	ticketID := data[0x90:0x98]
-	consoleID := data[0x98:0x9c]
-	titleID := data[0x9c:0xa4]
+	ticketID := binary.BigEndian.Uint64(data[0x90:])
+	consoleID := binary.BigEndian.Uint32(data[0x98:])
+	titleID := binary.BigEndian.Uint64(data[0x9c:])
 
 	encryptedTitleKey := data[0x7f:0x8f]
 
-	var commonKeyIndex uint8
-	err = binary.Read(bytes.NewReader(data[0xb1:]), binary.BigEndian, &commonKeyIndex)
-	if err != nil {
-		return nil, fmt.Errorf("ticket: failed to parse common key index: %w", err)
-	}
-	if int(commonKeyIndex) >= len(commonKeys) {
+	commonKeyIndex := int(data[0xb1])
+	if commonKeyIndex >= len(commonKeys) {
 		return nil, fmt.Errorf("ticket: common key index must be less than %d, got %d", len(commonKeys), commonKeyIndex)
 	}
 
@@ -78,7 +67,7 @@ func CheckTicket(input io.Reader) (*TicketInfo, error) {
 		return nil, fmt.Errorf("ticket: failed to initialize title key decryption: %w", err)
 	}
 	titleKeyIV := make([]byte, 0x10)
-	copy(titleKeyIV, titleID)
+	binary.BigEndian.PutUint64(titleKeyIV, titleID)
 	titleKeyDecrypter := cipher.NewCBCDecrypter(titleKeyCipher, titleKeyIV)
 
 	decryptedTitleKey := make([]byte, 0x10)
@@ -115,12 +104,12 @@ func CheckTicket(input io.Reader) (*TicketInfo, error) {
 
 	return &TicketInfo{
 		Legit:     legit,
-		TicketID:  strings.ToUpper(hex.EncodeToString(ticketID)),
-		ConsoleID: strings.ToUpper(hex.EncodeToString(consoleID)),
-		TitleID:   strings.ToUpper(hex.EncodeToString(titleID)),
+		TicketID:  Hex64(ticketID),
+		ConsoleID: Hex32(consoleID),
+		TitleID:   Hex64(titleID),
 		TitleKey: TitleKey{
-			Encrypted: strings.ToUpper(hex.EncodeToString(encryptedTitleKey)),
-			Decrypted: strings.ToUpper(hex.EncodeToString(decryptedTitleKey)),
+			Encrypted: encryptedTitleKey,
+			Decrypted: decryptedTitleKey,
 		},
 		CertsTrailer: certsTrailer,
 	}, nil

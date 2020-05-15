@@ -5,28 +5,26 @@ import (
 	"crypto"
 	"crypto/rsa"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/connesc/ctrsigcheck/reader"
 )
 
 type TMDInfo struct {
 	Legit        bool
-	TitleID      string
+	TitleID      Hex64
 	TitleVersion uint16
 	Contents     []TMDContent
 	CertsTrailer bool
 }
 
 type TMDContent struct {
-	ID    string
-	Index string
-	Type  string
+	ID    Hex32
+	Index Hex16
+	Type  Hex16
 	Size  uint64
-	Hash  string
+	Hash  Hex
 }
 
 func CheckTMD(input io.Reader) (*TMDInfo, error) {
@@ -38,12 +36,7 @@ func CheckTMD(input io.Reader) (*TMDInfo, error) {
 		return nil, fmt.Errorf("tmd: failed to read first part of TMD: %w", err)
 	}
 
-	var signatureType uint32
-	err = binary.Read(bytes.NewReader(tmdHigh), binary.BigEndian, &signatureType)
-	if err != nil {
-		return nil, fmt.Errorf("tmd: failed to parse signature type: %w", err)
-	}
-
+	signatureType := binary.BigEndian.Uint32(tmdHigh)
 	if signatureType != 0x10004 {
 		return nil, fmt.Errorf("tmd: signature type must be 0x%08x, got 0x%08x", 0x10004, signatureType)
 	}
@@ -59,19 +52,9 @@ func CheckTMD(input io.Reader) (*TMDInfo, error) {
 		legit = rsa.VerifyPKCS1v15(&Certs.Retail.TMD.PublicKey, crypto.SHA256, sha256Hash(header), signature) == nil
 	}
 
-	titleID := strings.ToUpper(hex.EncodeToString(header[0x4c:0x54]))
-
-	var titleVersion uint16
-	err = binary.Read(bytes.NewReader(header[0x9c:]), binary.BigEndian, &titleVersion)
-	if err != nil {
-		return nil, fmt.Errorf("tmd: failed to parse title version: %w", err)
-	}
-
-	var contentCount uint16
-	err = binary.Read(bytes.NewReader(header[0x9e:]), binary.BigEndian, &contentCount)
-	if err != nil {
-		return nil, fmt.Errorf("tmd: failed to parse content count: %w", err)
-	}
+	titleID := binary.BigEndian.Uint64(header[0x4c:])
+	titleVersion := binary.BigEndian.Uint16(header[0x9c:])
+	contentCount := binary.BigEndian.Uint16(header[0x9e:])
 
 	if legit {
 		legit = bytes.Equal(sha256Hash(contentInfoRecords), header[0xa4:0xc4])
@@ -87,12 +70,7 @@ func CheckTMD(input io.Reader) (*TMDInfo, error) {
 	for infoIndex := 0; infoIndex < 64; infoIndex++ {
 		infoRecord := contentInfoRecords[infoIndex*0x24 : (infoIndex+1)*0x24]
 
-		var count uint16
-		err = binary.Read(bytes.NewReader(infoRecord[0x2:]), binary.BigEndian, &count)
-		if err != nil {
-			return nil, fmt.Errorf("tmd: failed to parse count from content info record %d: %w", infoIndex, err)
-		}
-
+		count := binary.BigEndian.Uint16(infoRecord[0x2:])
 		if count == 0 {
 			continue
 		}
@@ -106,22 +84,16 @@ func CheckTMD(input io.Reader) (*TMDInfo, error) {
 		for chunkIndex := 0; chunkIndex < int(count); chunkIndex++ {
 			chunkRecord := chunkRecords[chunkIndex*0x30 : (chunkIndex+1)*0x30]
 
-			contentID := strings.ToUpper(hex.EncodeToString(chunkRecord[0:0x4]))
-			contentIndex := strings.ToUpper(hex.EncodeToString(chunkRecord[0x4:0x6]))
-			contentType := strings.ToUpper(hex.EncodeToString(chunkRecord[0x6:0x8]))
-
-			var contentSize uint64
-			err = binary.Read(bytes.NewReader(chunkRecord[0x8:]), binary.BigEndian, &contentSize)
-			if err != nil {
-				return nil, fmt.Errorf("tmd: failed to parse content size from content chunk record %d: %w", chunkIndex, err)
-			}
-
-			contentHash := strings.ToUpper(hex.EncodeToString(chunkRecord[0x10:0x30]))
+			contentID := binary.BigEndian.Uint32(chunkRecord)
+			contentIndex := binary.BigEndian.Uint16(chunkRecord[0x4:])
+			contentType := binary.BigEndian.Uint16(chunkRecord[0x6:])
+			contentSize := binary.BigEndian.Uint64(chunkRecord[0x8:])
+			contentHash := chunkRecord[0x10:0x30]
 
 			contents = append(contents, TMDContent{
-				ID:    contentID,
-				Index: contentIndex,
-				Type:  contentType,
+				ID:    Hex32(contentID),
+				Index: Hex16(contentIndex),
+				Type:  Hex16(contentType),
 				Size:  contentSize,
 				Hash:  contentHash,
 			})
@@ -152,7 +124,7 @@ func CheckTMD(input io.Reader) (*TMDInfo, error) {
 
 	return &TMDInfo{
 		Legit:        legit,
-		TitleID:      titleID,
+		TitleID:      Hex64(titleID),
 		TitleVersion: titleVersion,
 		Contents:     contents,
 		CertsTrailer: certsTrailer,

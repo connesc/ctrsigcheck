@@ -24,33 +24,14 @@ func CheckCIA(input io.Reader) (*CIAInfo, error) {
 		return nil, fmt.Errorf("cia: failed to read header: %w", err)
 	}
 
-	var headerLen uint32
-	err = binary.Read(bytes.NewReader(header), binary.LittleEndian, &headerLen)
-	if err != nil {
-		return nil, fmt.Errorf("cia: failed to parse header length: %w", err)
-	}
-
+	headerLen := binary.LittleEndian.Uint32(header)
 	if headerLen != 0x2020 {
 		return nil, fmt.Errorf("cia: header length must be %d, got %d", 0x2020, headerLen)
 	}
 
-	var certsLen uint32
-	err = binary.Read(bytes.NewReader(header[0x8:]), binary.LittleEndian, &certsLen)
-	if err != nil {
-		return nil, fmt.Errorf("cia: failed to parse certs length: %w", err)
-	}
-
-	var ticketLen uint32
-	err = binary.Read(bytes.NewReader(header[0xc:]), binary.LittleEndian, &ticketLen)
-	if err != nil {
-		return nil, fmt.Errorf("cia: failed to parse ticket length: %w", err)
-	}
-
-	var tmdLen uint32
-	err = binary.Read(bytes.NewReader(header[0x10:]), binary.LittleEndian, &tmdLen)
-	if err != nil {
-		return nil, fmt.Errorf("cia: failed to parse TMD length: %w", err)
-	}
+	certsLen := binary.LittleEndian.Uint32(header[0x8:])
+	ticketLen := binary.LittleEndian.Uint32(header[0xc:])
+	tmdLen := binary.LittleEndian.Uint32(header[0x10:])
 
 	expectedCertsLen := uint32(len(Certs.Retail.CA.Raw) + len(Certs.Retail.Ticket.Raw) + len(Certs.Retail.TMD.Raw))
 	if certsLen != expectedCertsLen {

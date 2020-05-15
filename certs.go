@@ -36,13 +36,7 @@ func init() {
 }
 
 func parseCertificate(raw []byte) Certificate {
-	reader := bytes.NewReader(raw)
-
-	var signatureType uint32
-	err := binaryReadAt(reader, 0, binary.BigEndian, &signatureType)
-	if err != nil {
-		panic(fmt.Errorf("certs: %w", err))
-	}
+	signatureType := binary.BigEndian.Uint32(raw)
 
 	var signatureLen int64
 	switch signatureType {
@@ -54,11 +48,7 @@ func parseCertificate(raw []byte) Certificate {
 		panic(fmt.Errorf("certs: unexpected signature type: 0x%08x", signatureType))
 	}
 
-	var keyType uint32
-	err = binaryReadAt(reader, signatureLen+0x40, binary.BigEndian, &keyType)
-	if err != nil {
-		panic(fmt.Errorf("certs: failed to parse key type: %w", err))
-	}
+	keyType := binary.BigEndian.Uint32(raw[signatureLen+0x40:])
 
 	var modulusLen int64
 	switch keyType {
@@ -71,14 +61,8 @@ func parseCertificate(raw []byte) Certificate {
 	}
 
 	name := string(bytes.TrimRight(raw[signatureLen+0x44:signatureLen+0x84], "\x00"))
-
 	modulus := new(big.Int).SetBytes(raw[signatureLen+0x88 : signatureLen+0x88+modulusLen])
-
-	var exponent int32
-	err = binaryReadAt(reader, signatureLen+0x88+modulusLen, binary.BigEndian, &exponent)
-	if err != nil {
-		panic(fmt.Errorf("certs: failed to parse public key exponent: %w", err))
-	}
+	exponent := binary.BigEndian.Uint32(raw[signatureLen+0x88+modulusLen:])
 
 	return Certificate{
 		Name: name,
