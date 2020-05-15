@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/connesc/ctrsigcheck/reader"
+	"github.com/connesc/ctrsigcheck/ctrutil"
 )
 
 type TMD struct {
@@ -28,10 +28,10 @@ type TMDContent struct {
 }
 
 func CheckTMD(input io.Reader) (*TMD, error) {
-	inputReader := reader.New(input)
+	reader := ctrutil.NewReader(input)
 
 	tmdHigh := make([]byte, 0xb04)
-	_, err := io.ReadFull(inputReader, tmdHigh)
+	_, err := io.ReadFull(reader, tmdHigh)
 	if err != nil {
 		return nil, fmt.Errorf("tmd: failed to read first part of TMD: %w", err)
 	}
@@ -61,7 +61,7 @@ func CheckTMD(input io.Reader) (*TMD, error) {
 	}
 
 	contentChunkRecords := make([]byte, 0x30*uint32(contentCount))
-	_, err = io.ReadFull(inputReader, contentChunkRecords)
+	_, err = io.ReadFull(reader, contentChunkRecords)
 	if err != nil {
 		return nil, fmt.Errorf("tmd: failed to read TMD content chunk records: %w", err)
 	}
@@ -104,7 +104,7 @@ func CheckTMD(input io.Reader) (*TMD, error) {
 	certsTrailer := true
 	certs := make([]byte, len(Certs.Retail.CA.Raw)+len(Certs.Retail.TMD.Raw))
 
-	_, err = io.ReadFull(inputReader, certs)
+	_, err = io.ReadFull(reader, certs)
 	if err == io.EOF {
 		certsTrailer = false
 	} else if err != nil {

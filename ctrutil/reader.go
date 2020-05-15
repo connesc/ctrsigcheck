@@ -1,4 +1,4 @@
-package reader
+package ctrutil
 
 import (
 	"io"
@@ -13,7 +13,7 @@ type Reader struct {
 
 var _ io.Reader = &Reader{}
 
-func New(inner io.Reader) *Reader {
+func NewReader(inner io.Reader) *Reader {
 	return &Reader{
 		inner:  inner,
 		offset: 0,

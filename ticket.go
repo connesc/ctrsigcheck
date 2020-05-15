@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/connesc/ctrsigcheck/reader"
+	"github.com/connesc/ctrsigcheck/ctrutil"
 )
 
 type TitleKey struct {
@@ -28,10 +28,10 @@ type Ticket struct {
 }
 
 func CheckTicket(input io.Reader) (*Ticket, error) {
-	inputReader := reader.New(input)
+	reader := ctrutil.NewReader(input)
 
 	ticket := make([]byte, 0x350)
-	_, err := io.ReadFull(inputReader, ticket)
+	_, err := io.ReadFull(reader, ticket)
 	if err != nil {
 		return nil, fmt.Errorf("ticket: failed to read ticket: %w", err)
 	}
@@ -66,7 +66,7 @@ func CheckTicket(input io.Reader) (*Ticket, error) {
 	if err != nil {
 		return nil, fmt.Errorf("ticket: failed to initialize title key decryption: %w", err)
 	}
-	titleKeyIV := make([]byte, 0x10)
+	titleKeyIV := make([]byte, titleKeyCipher.BlockSize())
 	binary.BigEndian.PutUint64(titleKeyIV, titleID)
 	titleKeyDecrypter := cipher.NewCBCDecrypter(titleKeyCipher, titleKeyIV)
 
@@ -76,7 +76,7 @@ func CheckTicket(input io.Reader) (*Ticket, error) {
 	certsTrailer := true
 	certs := make([]byte, len(Certs.Retail.CA.Raw)+len(Certs.Retail.Ticket.Raw))
 
-	_, err = io.ReadFull(inputReader, certs)
+	_, err = io.ReadFull(reader, certs)
 	if err == io.EOF {
 		certsTrailer = false
 	} else if err != nil {
@@ -95,9 +95,9 @@ func CheckTicket(input io.Reader) (*Ticket, error) {
 		}
 	}
 
-	err = inputReader.Discard(1)
+	err = reader.Discard(1)
 	if err == nil {
-		return nil, fmt.Errorf("ticket: extraneous data after %d bytes", inputReader.Offset())
+		return nil, fmt.Errorf("ticket: extraneous data after %d bytes", reader.Offset())
 	} else if err != io.EOF {
 		return nil, fmt.Errorf("ticket: failed to check extraneous data: %w", err)
 	}

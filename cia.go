@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/connesc/ctrsigcheck/reader"
+	"github.com/connesc/ctrsigcheck/ctrutil"
 )
 
 type CIA struct {
@@ -16,10 +16,10 @@ type CIA struct {
 }
 
 func CheckCIA(input io.Reader) (*CIA, error) {
-	inputReader := reader.New(input)
+	reader := ctrutil.NewReader(input)
 
 	header := make([]byte, 0x2020)
-	_, err := io.ReadFull(inputReader, header)
+	_, err := io.ReadFull(reader, header)
 	if err != nil {
 		return nil, fmt.Errorf("cia: failed to read header: %w", err)
 	}
@@ -38,13 +38,13 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 		return nil, fmt.Errorf("cia: certs length must be %d, got %d", expectedCertsLen, certsLen)
 	}
 
-	err = inputReader.Discard((0x40 - (inputReader.Offset() % 0x40)) % 0x40)
+	err = reader.Discard((0x40 - (reader.Offset() % 0x40)) % 0x40)
 	if err != nil {
 		return nil, fmt.Errorf("cia: failed to skip TMD padding: %w", err)
 	}
 
 	certs := make([]byte, certsLen)
-	_, err = io.ReadFull(inputReader, certs)
+	_, err = io.ReadFull(reader, certs)
 	if err != nil {
 		return nil, fmt.Errorf("cia: failed to read certs: %w", err)
 	}
@@ -64,12 +64,12 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 		return nil, fmt.Errorf("cia: invalid TMD certificate")
 	}
 
-	err = inputReader.Discard((0x40 - (inputReader.Offset() % 0x40)) % 0x40)
+	err = reader.Discard((0x40 - (reader.Offset() % 0x40)) % 0x40)
 	if err != nil {
 		return nil, fmt.Errorf("cia: failed to skip certs padding: %w", err)
 	}
 
-	ticket, err := CheckTicket(io.LimitReader(inputReader, int64(ticketLen)))
+	ticket, err := CheckTicket(io.LimitReader(reader, int64(ticketLen)))
 	if err != nil {
 		return nil, err
 	}
@@ -78,12 +78,12 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 		return nil, fmt.Errorf("cia: unexpected certs trailer in ticket")
 	}
 
-	err = inputReader.Discard((0x40 - (inputReader.Offset() % 0x40)) % 0x40)
+	err = reader.Discard((0x40 - (reader.Offset() % 0x40)) % 0x40)
 	if err != nil {
 		return nil, fmt.Errorf("cia: failed to skip ticket padding: %w", err)
 	}
 
-	tmd, err := CheckTMD(io.LimitReader(inputReader, int64(tmdLen)))
+	tmd, err := CheckTMD(io.LimitReader(reader, int64(tmdLen)))
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 		return nil, fmt.Errorf("cia: unexpected certs trailer in TMD")
 	}
 
-	err = inputReader.Discard((0x40 - (inputReader.Offset() % 0x40)) % 0x40)
+	err = reader.Discard((0x40 - (reader.Offset() % 0x40)) % 0x40)
 	if err != nil {
 		return nil, fmt.Errorf("cia: failed to skip TMD padding: %w", err)
 	}
