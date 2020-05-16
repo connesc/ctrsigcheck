@@ -54,32 +54,35 @@ func CheckTMD(input io.Reader) (*TMD, error) {
 
 	titleID := binary.BigEndian.Uint64(header[0x4c:])
 	titleVersion := binary.BigEndian.Uint16(header[0x9c:])
-	contentCount := binary.BigEndian.Uint16(header[0x9e:])
+	contentCount := int(binary.BigEndian.Uint16(header[0x9e:]))
 
 	if !bytes.Equal(sha256Hash(contentInfoRecords), header[0xa4:0xc4]) {
 		return nil, fmt.Errorf("tmd: invalid hash for content info records")
 	}
 
-	contentChunkRecords := make([]byte, 0x30*uint32(contentCount))
+	contentChunkRecords := make([]byte, 0x30*contentCount)
 	_, err = io.ReadFull(reader, contentChunkRecords)
 	if err != nil {
-		return nil, fmt.Errorf("tmd: failed to read TMD content chunk records: %w", err)
+		return nil, fmt.Errorf("tmd: failed to read content chunk records: %w", err)
 	}
 
 	contents := make([]TMDContent, 0, contentCount)
 	for infoIndex := 0; infoIndex < 64; infoIndex++ {
 		infoRecord := contentInfoRecords[infoIndex*0x24 : (infoIndex+1)*0x24]
 
-		fisrtChunk := len(contents)
+		firstChunk := len(contents)
 		count := int(binary.BigEndian.Uint16(infoRecord[0x2:]))
 		if count == 0 {
 			continue
 		}
+		if len(contents)+count > contentCount {
+			return nil, fmt.Errorf("tmd: content count exceeded at content info record %d: %d > %d", infoIndex, len(contents)+count, contentCount)
+		}
 
-		chunkRecords := contentChunkRecords[0x30*fisrtChunk : 0x30*(fisrtChunk+count)]
+		chunkRecords := contentChunkRecords[0x30*firstChunk : 0x30*(firstChunk+count)]
 
 		if !bytes.Equal(sha256Hash(chunkRecords), infoRecord[0x04:0x24]) {
-			return nil, fmt.Errorf("tmd: invalid hash for content chunk records %d to %d", fisrtChunk, fisrtChunk+count-1)
+			return nil, fmt.Errorf("tmd: invalid hash for content chunk records %d to %d", firstChunk, firstChunk+count-1)
 		}
 
 		for chunkIndex := 0; chunkIndex < count; chunkIndex++ {
@@ -91,7 +94,9 @@ func CheckTMD(input io.Reader) (*TMD, error) {
 			contentSize := binary.BigEndian.Uint64(chunkRecord[0x8:])
 			contentHash := chunkRecord[0x10:0x30]
 
-			// TODO: check contentIndex
+			if contentIndex >= 0x2000 {
+				return nil, fmt.Errorf("tmd: content index must be less than 0x%04x, got 0x%04x", 0x2000, contentIndex)
+			}
 
 			contents = append(contents, TMDContent{
 				ID:    Hex32(contentID),
@@ -101,6 +106,10 @@ func CheckTMD(input io.Reader) (*TMD, error) {
 				Hash:  contentHash,
 			})
 		}
+	}
+
+	if len(contents) < contentCount {
+		return nil, fmt.Errorf("tmd: content chunk records are fewer than expected: %d < %d", len(contents), contentCount)
 	}
 
 	certsTrailer := true

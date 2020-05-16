@@ -14,9 +14,29 @@ import (
 
 type CIA struct {
 	Legit    bool
-	Ticket   Ticket
-	TMD      TMD
+	Complete bool
+	TitleID  Hex64
+	Ticket   CIATicket
+	TMD      CIATMD
+	Contents []CIAContent
 	MetaSize uint32
+}
+
+type CIATicket struct {
+	Legit     bool
+	TicketID  Hex64
+	ConsoleID Hex32
+	TitleKey  TitleKey
+}
+
+type CIATMD struct {
+	Legit        bool
+	TitleVersion uint16
+}
+
+type CIAContent struct {
+	Missing bool
+	TMDContent
 }
 
 func CheckCIA(input io.Reader) (*CIA, error) {
@@ -104,22 +124,56 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 		return nil, fmt.Errorf("cia: failed to skip TMD padding: %w", err)
 	}
 
-	if ticket.TitleID != tmd.TitleID {
+	titleID := tmd.TitleID
+	if ticket.TitleID != titleID {
 		return nil, fmt.Errorf("cia: ticket and TMD have different title IDs: %s != %s", ticket.TitleID, tmd.TitleID)
 	}
 
-	// TODO: check content index & content length
-	_ = contentLen
-	_ = contentIndex
-
 	legit := ticket.Legit && tmd.Legit
 
-	for _, content := range tmd.Contents {
-		size := int64(content.Size)
-		if size < 0 {
-			return nil, fmt.Errorf("cia: invalid content size: %d", content.Size)
+	indexLen := (len(tmd.Contents) + 7) / 8
+	lastIndexBits := len(tmd.Contents) % 8
+	if lastIndexBits != 0 {
+		if contentIndex[indexLen-1]<<lastIndexBits != 0 {
+			return nil, fmt.Errorf("cia: content index contains more than %d entries", len(tmd.Contents))
+		}
+	}
+	for _, indexByte := range contentIndex[indexLen:] {
+		if indexByte != 0 {
+			return nil, fmt.Errorf("cia: content index contains more than %d entries", len(tmd.Contents))
+		}
+	}
+
+	contents := make([]CIAContent, len(tmd.Contents))
+	contentsSize := uint64(0)
+	complete := true
+	for index, content := range tmd.Contents {
+		missing := contentIndex[content.Index/8]&(1<<(7-(content.Index%8))) == 0
+		if missing {
+			complete = false
+		} else {
+			contentsSize += content.Size
+		}
+		contents[index] = CIAContent{
+			Missing:    missing,
+			TMDContent: content,
+		}
+	}
+
+	if contentsSize != contentLen {
+		return nil, fmt.Errorf("cia: total size of contents does not match expected value: %d != %d", contentsSize, contentLen)
+	}
+
+	for _, content := range contents {
+		if content.Missing {
+			continue
 		}
 
+		if content.Size >= 1<<63 {
+			return nil, fmt.Errorf("cia: size of content %s too large: %d", content.ID, content.Size)
+		}
+
+		size := int64(content.Size)
 		data := io.LimitReader(reader, size)
 		endOffset := reader.Offset() + size
 
@@ -171,8 +225,19 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 
 	return &CIA{
 		Legit:    legit,
-		Ticket:   *ticket,
-		TMD:      *tmd,
+		Complete: complete,
+		TitleID:  titleID,
+		Ticket: CIATicket{
+			Legit:     ticket.Legit,
+			TicketID:  ticket.TicketID,
+			ConsoleID: ticket.ConsoleID,
+			TitleKey:  ticket.TitleKey,
+		},
+		TMD: CIATMD{
+			Legit:        tmd.Legit,
+			TitleVersion: tmd.TitleVersion,
+		},
+		Contents: contents,
 		MetaSize: metaLen,
 	}, nil
 }
