@@ -96,7 +96,7 @@ func CheckTicket(input io.Reader) (*Ticket, error) {
 
 		err = reader.Discard(1)
 		if err == nil {
-			return nil, fmt.Errorf("ticket: extraneous data after %d bytes", reader.Offset())
+			return nil, fmt.Errorf("ticket: extraneous data after %d bytes", reader.Offset()-1)
 		} else if err != io.EOF {
 			return nil, fmt.Errorf("ticket: failed to check extraneous data: %w", err)
 		}

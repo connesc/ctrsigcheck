@@ -225,7 +225,7 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 
 	err = reader.Discard(1)
 	if err == nil {
-		return nil, fmt.Errorf("cia: extraneous data after %d bytes", reader.Offset())
+		return nil, fmt.Errorf("cia: extraneous data after %d bytes", reader.Offset()-1)
 	} else if err != io.EOF {
 		return nil, fmt.Errorf("cia: failed to check extraneous data: %w", err)
 	}

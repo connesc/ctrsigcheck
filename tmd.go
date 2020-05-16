@@ -135,7 +135,7 @@ func CheckTMD(input io.Reader) (*TMD, error) {
 
 		err = reader.Discard(1)
 		if err == nil {
-			return nil, fmt.Errorf("tmd: extraneous data after %d bytes", reader.Offset())
+			return nil, fmt.Errorf("tmd: extraneous data after %d bytes", reader.Offset()-1)
 		} else if err != io.EOF {
 			return nil, fmt.Errorf("tmd: failed to check extraneous data: %w", err)
 		}
