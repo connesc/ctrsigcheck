@@ -93,13 +93,13 @@ func CheckTicket(input io.Reader) (*Ticket, error) {
 		if !bytes.Equal(certs[ticketCertLen:ticketCertLen+caCertLen], Certs.Retail.CA.Raw) {
 			return nil, fmt.Errorf("ticket: invalid CA certificate in trailer")
 		}
-	}
 
-	err = reader.Discard(1)
-	if err == nil {
-		return nil, fmt.Errorf("ticket: extraneous data after %d bytes", reader.Offset())
-	} else if err != io.EOF {
-		return nil, fmt.Errorf("ticket: failed to check extraneous data: %w", err)
+		err = reader.Discard(1)
+		if err == nil {
+			return nil, fmt.Errorf("ticket: extraneous data after %d bytes", reader.Offset())
+		} else if err != io.EOF {
+			return nil, fmt.Errorf("ticket: failed to check extraneous data: %w", err)
+		}
 	}
 
 	return &Ticket{

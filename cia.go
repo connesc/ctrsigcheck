@@ -13,9 +13,10 @@ import (
 )
 
 type CIA struct {
-	Legit  bool
-	Ticket Ticket
-	TMD    TMD
+	Legit    bool
+	Ticket   Ticket
+	TMD      TMD
+	MetaSize uint32
 }
 
 func CheckCIA(input io.Reader) (*CIA, error) {
@@ -35,6 +36,9 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 	certsLen := binary.LittleEndian.Uint32(header[0x8:])
 	ticketLen := binary.LittleEndian.Uint32(header[0xc:])
 	tmdLen := binary.LittleEndian.Uint32(header[0x10:])
+	metaLen := binary.LittleEndian.Uint32(header[0x14:])
+	contentLen := binary.LittleEndian.Uint64(header[0x18:])
+	contentIndex := header[0x20:]
 
 	expectedCertsLen := uint32(len(Certs.Retail.CA.Raw) + len(Certs.Retail.Ticket.Raw) + len(Certs.Retail.TMD.Raw))
 	if certsLen != expectedCertsLen {
@@ -104,6 +108,10 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 		return nil, fmt.Errorf("cia: ticket and TMD have different title IDs: %s != %s", ticket.TitleID, tmd.TitleID)
 	}
 
+	// TODO: check content index & content length
+	_ = contentLen
+	_ = contentIndex
+
 	legit := ticket.Legit && tmd.Legit
 
 	for _, content := range tmd.Contents {
@@ -142,9 +150,29 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 		}
 	}
 
+	if metaLen > 0 {
+		err = reader.Discard((0x40 - (reader.Offset() % 0x40)) % 0x40)
+		if err != nil {
+			return nil, fmt.Errorf("cia: failed to skip contents padding: %w", err)
+		}
+
+		err = reader.Discard(int64(metaLen))
+		if err != nil {
+			return nil, fmt.Errorf("cia: failed to read meta")
+		}
+	}
+
+	err = reader.Discard(1)
+	if err == nil {
+		return nil, fmt.Errorf("cia: extraneous data after %d bytes", reader.Offset())
+	} else if err != io.EOF {
+		return nil, fmt.Errorf("cia: failed to check extraneous data: %w", err)
+	}
+
 	return &CIA{
-		Legit:  legit,
-		Ticket: *ticket,
-		TMD:    *tmd,
+		Legit:    legit,
+		Ticket:   *ticket,
+		TMD:      *tmd,
+		MetaSize: metaLen,
 	}, nil
 }

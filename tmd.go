@@ -91,6 +91,8 @@ func CheckTMD(input io.Reader) (*TMD, error) {
 			contentSize := binary.BigEndian.Uint64(chunkRecord[0x8:])
 			contentHash := chunkRecord[0x10:0x30]
 
+			// TODO: check contentIndex
+
 			contents = append(contents, TMDContent{
 				ID:    Hex32(contentID),
 				Index: Hex16(contentIndex),
@@ -120,6 +122,13 @@ func CheckTMD(input io.Reader) (*TMD, error) {
 		caCertLen := len(Certs.Retail.CA.Raw)
 		if !bytes.Equal(certs[tmdCertLen:tmdCertLen+caCertLen], Certs.Retail.CA.Raw) {
 			return nil, fmt.Errorf("tmd: invalid CA certificate in trailer")
+		}
+
+		err = reader.Discard(1)
+		if err == nil {
+			return nil, fmt.Errorf("tmd: extraneous data after %d bytes", reader.Offset())
+		} else if err != io.EOF {
+			return nil, fmt.Errorf("tmd: failed to check extraneous data: %w", err)
 		}
 	}
 
