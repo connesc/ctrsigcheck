@@ -149,10 +149,12 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 	complete := true
 	for index, content := range tmd.Contents {
 		missing := contentIndex[content.Index/8]&(1<<(7-(content.Index%8))) == 0
-		if missing {
-			complete = false
-		} else {
+		if !missing {
 			contentsSize += content.Size
+		} else if content.Type&0x4000 == 0 {
+			return nil, fmt.Errorf("cia: required content %s is missing", content.ID)
+		} else {
+			complete = false
 		}
 		contents[index] = CIAContent{
 			Missing:    missing,
