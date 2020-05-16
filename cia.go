@@ -19,7 +19,7 @@ type CIA struct {
 	Ticket   CIATicket
 	TMD      CIATMD
 	Contents []CIAContent
-	MetaSize uint32
+	Meta     bool
 }
 
 type CIATicket struct {
@@ -204,7 +204,12 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 		}
 	}
 
-	if metaLen > 0 {
+	meta := metaLen > 0
+	if meta {
+		if metaLen != 0x3ac0 {
+			return nil, fmt.Errorf("cia: when present, meta must have length %d, got %d", 0x3ac0, metaLen)
+		}
+
 		err = reader.Discard((0x40 - (reader.Offset() % 0x40)) % 0x40)
 		if err != nil {
 			return nil, fmt.Errorf("cia: failed to skip contents padding: %w", err)
@@ -238,6 +243,6 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 			TitleVersion: tmd.TitleVersion,
 		},
 		Contents: contents,
-		MetaSize: metaLen,
+		Meta:     meta,
 	}, nil
 }
