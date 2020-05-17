@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"io/ioutil"
 
 	"github.com/connesc/ctrsigcheck/ctrutil"
 )
@@ -19,6 +20,7 @@ type CIA struct {
 	Ticket   CIATicket
 	TMD      CIATMD
 	Contents []CIAContent
+	Icon     *SMDH
 	Meta     bool
 }
 
@@ -166,6 +168,8 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 		return nil, fmt.Errorf("cia: total size of contents does not match expected value: %d != %d", contentsSize, contentLen)
 	}
 
+	var icon *SMDH
+
 	for _, content := range contents {
 		if content.Missing {
 			continue
@@ -177,9 +181,8 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 
 		size := int64(content.Size)
 		data := io.LimitReader(reader, size)
-		endOffset := reader.Offset() + size
 
-		if content.Type&0x1 == 1 {
+		if content.Type&0x1 != 0 {
 			contentCipher, err := aes.NewCipher(ticket.TitleKey.Decrypted)
 			if err != nil {
 				return nil, fmt.Errorf("cia: failed to initialize AES cipher for content %s: %w", content.ID, err)
@@ -193,8 +196,24 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 		}
 
 		hash := sha256.New()
-		_, err = io.Copy(hash, data)
-		if reader.Offset() < endOffset {
+		data = io.TeeReader(data, hash)
+
+		dataReader := ctrutil.NewReader(data)
+		ncch, err := ParseNCCH(dataReader)
+		if err != nil {
+			return nil, fmt.Errorf("cia: invalid content %s: %w", content.ID, err)
+		}
+
+		if ncch.ProgramID != titleID {
+			return nil, fmt.Errorf("cia: content %s has unecpected program ID: %s != %s", content.ID, ncch.ProgramID, titleID)
+		}
+
+		if content.Index == 0x0000 && ncch.ExeFS != nil {
+			icon = ncch.ExeFS.Icon
+		}
+
+		_, err = io.Copy(ioutil.Discard, dataReader)
+		if err == nil && dataReader.Offset() < size {
 			err = io.ErrUnexpectedEOF
 		}
 		if err != nil {
@@ -245,6 +264,7 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 			TitleVersion: tmd.TitleVersion,
 		},
 		Contents: contents,
+		Icon:     icon,
 		Meta:     meta,
 	}, nil
 }
