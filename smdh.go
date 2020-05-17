@@ -34,9 +34,9 @@ func ParseSMDH(input io.Reader) (*SMDH, error) {
 	}
 
 	title := data[0x208:0x408]
-	shortDescription := strings.TrimRight(decodeUTF16(title[:0x80], binary.LittleEndian), "\x00")
-	longDescription := strings.TrimRight(decodeUTF16(title[0x80:0x180], binary.LittleEndian), "\x00")
-	publisher := strings.TrimRight(decodeUTF16(title[0x180:0x200], binary.LittleEndian), "\x00")
+	shortDescription := strings.TrimRight(ctrutil.DecodeUTF16(title[:0x80], binary.LittleEndian), "\x00")
+	longDescription := strings.TrimRight(ctrutil.DecodeUTF16(title[0x80:0x180], binary.LittleEndian), "\x00")
+	publisher := strings.TrimRight(ctrutil.DecodeUTF16(title[0x180:0x200], binary.LittleEndian), "\x00")
 
 	regionFlags := binary.LittleEndian.Uint32(data[0x2018:])
 	regions := make([]string, 0, 1)
