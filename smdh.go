@@ -1,8 +1,10 @@
 package ctrsigcheck
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
+	"image/png"
 	"io"
 	"strings"
 
@@ -10,14 +12,20 @@ import (
 )
 
 type SMDH struct {
-	Title   SMDHTitle
-	Regions []string
+	Title    SMDHTitle
+	Regions  []string
+	Graphics SMDHGraphics
 }
 
 type SMDHTitle struct {
 	ShortDescription string
 	LongDescription  string
 	Publisher        string
+}
+
+type SMDHGraphics struct {
+	Small []byte
+	Large []byte
 }
 
 func ParseSMDH(input io.Reader) (*SMDH, error) {
@@ -68,6 +76,30 @@ func ParseSMDH(input io.Reader) (*SMDH, error) {
 		}
 	}
 
+	var pngBuffer bytes.Buffer
+
+	rawSmallIcon, err := DecodeIconImage(data[0x2040:0x24c0], 24)
+	if err != nil {
+		return nil, fmt.Errorf("smdh: failed to decode small icon image: %w", err)
+	}
+	err = png.Encode(&pngBuffer, rawSmallIcon)
+	if err != nil {
+		return nil, fmt.Errorf("smdh: failed to encode small icon image: %w", err)
+	}
+	smallIcon := make([]byte, pngBuffer.Len())
+	pngBuffer.Read(smallIcon)
+
+	rawLargeIcon, err := DecodeIconImage(data[0x24c0:0x36c0], 48)
+	if err != nil {
+		return nil, fmt.Errorf("smdh: failed to decode large icon image: %w", err)
+	}
+	err = png.Encode(&pngBuffer, rawLargeIcon)
+	if err != nil {
+		return nil, fmt.Errorf("smdh: failed to encode large icon image: %w", err)
+	}
+	largeIcon := make([]byte, pngBuffer.Len())
+	pngBuffer.Read(largeIcon)
+
 	return &SMDH{
 		Title: SMDHTitle{
 			ShortDescription: shortDescription,
@@ -75,5 +107,9 @@ func ParseSMDH(input io.Reader) (*SMDH, error) {
 			Publisher:        publisher,
 		},
 		Regions: regions,
+		Graphics: SMDHGraphics{
+			Small: smallIcon,
+			Large: largeIcon,
+		},
 	}, nil
 }
