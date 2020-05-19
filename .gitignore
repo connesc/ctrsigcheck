@@ -1,0 +1,6 @@
+/go.sum
+/dist/
+/*.cia
+/*.tik
+/*.cetk
+/*.tmd
