@@ -16,6 +16,10 @@ var _ io.Reader = &Reader{}
 
 // NewReader wraps the given Reader to add some capabilities.
 func NewReader(inner io.Reader) *Reader {
+	if inner, ok := inner.(*Reader); ok && inner.offset == 0 {
+		return inner
+	}
+
 	return &Reader{
 		inner:  inner,
 		offset: 0,
