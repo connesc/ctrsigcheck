@@ -9,10 +9,14 @@ import (
 	"github.com/connesc/ctrsigcheck/ctrutil"
 )
 
+// ExeFS describes the result of ExeFS parsing.
 type ExeFS struct {
 	Icon *SMDH
 }
 
+// ParseExeFS extracts some information from the given ExeFS file.
+//
+// No integrity checks are performed.
 func ParseExeFS(input io.Reader) (*ExeFS, error) {
 	reader := ctrutil.NewReader(input)
 

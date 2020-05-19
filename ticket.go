@@ -13,11 +13,13 @@ import (
 	"github.com/connesc/ctrsigcheck/ctrutil"
 )
 
+// TitleKey describes the title key embedded in ticket.
 type TitleKey struct {
 	Encrypted Hex
 	Decrypted Hex
 }
 
+// Ticket describes the content of a ticket file.
 type Ticket struct {
 	Legit        bool
 	TicketID     Hex64
@@ -27,6 +29,13 @@ type Ticket struct {
 	CertsTrailer bool
 }
 
+// CheckTicket reads the given ticket file and verifies its content.
+//
+// It may be followed by a certificate chain. This notably happens for files downloaded from
+// Nintendo's CDN. If a certificate chain is found, it is checked against expected content.
+//
+// A ticket is considered "legit" if its digital signature is properly verified. Unlike other
+// checks, signature checks don't produce errors, but instead expose a Legit boolean to the caller.
 func CheckTicket(input io.Reader) (*Ticket, error) {
 	reader := ctrutil.NewReader(input)
 

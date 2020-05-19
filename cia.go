@@ -13,6 +13,7 @@ import (
 	"github.com/connesc/ctrsigcheck/ctrutil"
 )
 
+// CIA describes a CIA file.
 type CIA struct {
 	Legit    bool
 	Complete bool
@@ -24,6 +25,7 @@ type CIA struct {
 	Meta     bool
 }
 
+// CIATicket describes the ticket embedded in a CIA file.
 type CIATicket struct {
 	Legit     bool
 	TicketID  Hex64
@@ -31,16 +33,31 @@ type CIATicket struct {
 	TitleKey  TitleKey
 }
 
+// CIATMD describes the TMD embedded in a CIA file.
 type CIATMD struct {
 	Legit        bool
 	TitleVersion uint16
 }
 
+// CIAContent describe a content section embedded in a CIA file.
 type CIAContent struct {
 	Missing bool
 	TMDContent
 }
 
+// CheckCIA reads the given CIA file and verifies its content.
+//
+// Many integrity checks are performed, including but not limited to SHA-256 hashes. If any
+// problem is detected, an error is immediately returned. Otherwise, a summary of the CIA file is
+// returned.
+//
+// Nintendo signatures are not required to be valid. Their status are made available to the caller
+// through the Legit booleans.
+//
+// A CIA file is considered "legit" if both its ticket and its TMD are "legit". Since the TMD
+// contains the hashes of content segments, a "legit" TMD also guarantees a "legit" content. A
+// "legit" ticket means that content is legitimately owned, either personnally (e.g. game or update
+// downloaded from eShop) or not (e.g. preinstalled game or system title).
 func CheckCIA(input io.Reader) (*CIA, error) {
 	reader := ctrutil.NewReader(input)
 

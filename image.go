@@ -26,6 +26,7 @@ func init() {
 	}
 }
 
+// DecodeIconImage as found in a SMDH file.
 func DecodeIconImage(src []byte, width int) (image.Image, error) {
 	if width <= 0 || width%8 != 0 {
 		return nil, fmt.Errorf("icon width must be positive and multiple of 8, got %d", width)

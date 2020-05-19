@@ -11,23 +11,27 @@ import (
 	"github.com/connesc/ctrsigcheck/ctrutil"
 )
 
+// SMDH describes the result of SMDH parsing.
 type SMDH struct {
 	Title    SMDHTitle
 	Regions  []string
 	Graphics SMDHGraphics
 }
 
+// SMDHTitle describes a title section embedded in a SMDH file.
 type SMDHTitle struct {
 	ShortDescription string
 	LongDescription  string
 	Publisher        string
 }
 
+// SMDHGraphics contains the PNG-encoded icons embedded in a SMDH file.
 type SMDHGraphics struct {
 	Small []byte
 	Large []byte
 }
 
+// ParseSMDH extracts some content from the given SMDH file.
 func ParseSMDH(input io.Reader) (*SMDH, error) {
 	reader := ctrutil.NewReader(input)
 

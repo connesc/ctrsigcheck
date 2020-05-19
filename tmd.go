@@ -11,6 +11,7 @@ import (
 	"github.com/connesc/ctrsigcheck/ctrutil"
 )
 
+// TMD describes a TMD structure.
 type TMD struct {
 	Legit        bool
 	TitleID      Hex64
@@ -19,6 +20,7 @@ type TMD struct {
 	CertsTrailer bool
 }
 
+// TMDContent describes a content record in a TMD.
 type TMDContent struct {
 	ID    Hex32
 	Index Hex16
@@ -27,6 +29,13 @@ type TMDContent struct {
 	Hash  Hex
 }
 
+// CheckTMD reads the given TMD file and verifies its content.
+//
+// It may be followed by a certificate chain. This notably happens for files downloaded from
+// Nintendo's CDN. If a certificate chain is found, it is checked against expected content.
+//
+// A TMD is considered "legit" if its digital signature is properly verified. Unlike other
+// checks, signature checks don't produce errors, but instead expose a Legit boolean to the caller.
 func CheckTMD(input io.Reader) (*TMD, error) {
 	reader := ctrutil.NewReader(input)
 

@@ -10,16 +10,19 @@ import (
 	"github.com/connesc/ctrsigcheck/internal/bindata"
 )
 
+// Certificate used to verify digital signatures.
 type Certificate struct {
 	Name      string
 	PublicKey rsa.PublicKey
 	Raw       []byte
 }
 
+// CertificateSet used to verify digital signatures of tickets and TMDs.
 type CertificateSet struct {
 	CA, Ticket, TMD Certificate
 }
 
+// Certs contains the retail and debug certificates from Nintendo.
 var Certs struct {
 	Retail CertificateSet
 	Debug  CertificateSet

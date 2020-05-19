@@ -10,12 +10,16 @@ import (
 	"github.com/connesc/ctrsigcheck/ctrutil"
 )
 
+// NCCH describes the result of NCCH parsing.
 type NCCH struct {
 	PartitionID Hex64
 	ProgramID   Hex64
 	ExeFS       *ExeFS
 }
 
+// ParseNCCH extracts some information from the given NCCH file.
+//
+// No integrity checks are performed.
 func ParseNCCH(input io.Reader) (*NCCH, error) {
 	reader := ctrutil.NewReader(input)
 
