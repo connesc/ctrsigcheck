@@ -21,9 +21,9 @@ type cipherReader struct {
 // reached in the middle of a block.
 //
 // This Reader limits buffering and copies to the minimum: lookahead can only happen if the last
-// requested block is incomplete. In that case, it is garanteed that the underlying Reader is never
+// requested block is incomplete. In that case, it is guaranteed that the wrapped Reader is never
 // read beyond the end of the incomplete block. In particular, it is safe to stop reading from this
-// Reader at a block boundary and then start using the underlying Reader for something else.
+// Reader at a block boundary and then start using the wrapped Reader for something else.
 func NewCipherReader(src io.Reader, blockMode cipher.BlockMode) io.Reader {
 	blockSize := blockMode.BlockSize()
 
