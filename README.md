@@ -21,9 +21,11 @@ generated without private keys that are only known by Nintendo.
 
 ## CLI
 
-The command-line tool can be installed like this:
+The command-line tool can be found precompiled in the [releases page](https://github.com/connesc/ctrsigcheck/releases).
 
-    go get github.com/connesc/ctrsigcheck/...
+Alternatively, it can be built and installed from source:
+
+    go get github.com/connesc/ctrsigcheck/cmd/ctrsigcheck
 
 ## Golang library
 
