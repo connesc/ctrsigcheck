@@ -22,11 +22,13 @@ type TMD struct {
 
 // TMDContent describes a content record in a TMD.
 type TMDContent struct {
-	ID    Hex32
-	Index Hex16
-	Type  Hex16
-	Size  uint64
-	Hash  Hex
+	ID        Hex32
+	Index     Hex16
+	Type      Hex16
+	Size      uint64
+	Hash      Hex
+	Encrypted bool
+	Optional  bool
 }
 
 // CheckTMD reads the given TMD file and verifies its content.
@@ -108,11 +110,13 @@ func CheckTMD(input io.Reader) (*TMD, error) {
 			}
 
 			contents = append(contents, TMDContent{
-				ID:    Hex32(contentID),
-				Index: Hex16(contentIndex),
-				Type:  Hex16(contentType),
-				Size:  contentSize,
-				Hash:  contentHash,
+				ID:        Hex32(contentID),
+				Index:     Hex16(contentIndex),
+				Type:      Hex16(contentType),
+				Size:      contentSize,
+				Hash:      contentHash,
+				Encrypted: contentType&0x0001 != 0,
+				Optional:  contentType&0x4000 != 0,
 			})
 		}
 	}

@@ -14,6 +14,7 @@ import (
 type NCCH struct {
 	PartitionID Hex64
 	ProgramID   Hex64
+	Encrypted   bool
 	ExeFS       *ExeFS
 }
 
@@ -44,6 +45,8 @@ func ParseNCCH(input io.Reader) (*NCCH, error) {
 	}
 
 	flags := header[0x188:0x190]
+	encrypted := flags[7]&0x4 == 0
+
 	exefsOffset := int64(binary.LittleEndian.Uint32(header[0x1a0:])) * 0x200
 	exefsSize := int64(binary.LittleEndian.Uint32(header[0x1a4:])) * 0x200
 
@@ -57,7 +60,7 @@ func ParseNCCH(input io.Reader) (*NCCH, error) {
 
 		data := io.LimitReader(reader, exefsSize)
 
-		if flags[7]&0x4 == 0 {
+		if encrypted {
 			var key []byte
 			switch {
 			case flags[7]&0x1 == 0:
@@ -95,6 +98,7 @@ func ParseNCCH(input io.Reader) (*NCCH, error) {
 	return &NCCH{
 		PartitionID: Hex64(partitionID),
 		ProgramID:   Hex64(programID),
+		Encrypted:   encrypted,
 		ExeFS:       exefs,
 	}, nil
 }

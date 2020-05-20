@@ -39,10 +39,16 @@ type CIATMD struct {
 	TitleVersion uint16
 }
 
-// CIAContent describe a content section embedded in a CIA file.
+// CIAContent describes a content section embedded in a CIA file.
 type CIAContent struct {
 	Missing bool
 	TMDContent
+	NCCH *CIAContentNCCH
+}
+
+// CIAContentNCCH describes the NCCH structure of a content section embedded in a CIA file.
+type CIAContentNCCH struct {
+	Encrypted bool
 }
 
 // CheckCIA reads the given CIA file and verifies its content.
@@ -170,7 +176,7 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 		missing := contentIndex[content.Index/8]&(1<<(7-(content.Index%8))) == 0
 		if !missing {
 			contentsSize += content.Size
-		} else if content.Type&0x4000 == 0 {
+		} else if !content.Optional {
 			return nil, fmt.Errorf("cia: required content %s is missing", content.ID)
 		} else {
 			complete = false
@@ -187,7 +193,8 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 
 	var icon *SMDH
 
-	for _, content := range contents {
+	for index := range contents {
+		content := &contents[index]
 		if content.Missing {
 			continue
 		}
@@ -199,7 +206,7 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 		size := int64(content.Size)
 		data := io.LimitReader(reader, size)
 
-		if content.Type&0x1 != 0 {
+		if content.Encrypted {
 			contentCipher, err := aes.NewCipher(ticket.TitleKey.Decrypted)
 			if err != nil {
 				return nil, fmt.Errorf("cia: failed to initialize AES cipher for content %s: %w", content.ID, err)
@@ -223,6 +230,10 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 
 		if ncch.ProgramID != titleID {
 			return nil, fmt.Errorf("cia: content %s has unecpected program ID: %s != %s", content.ID, ncch.ProgramID, titleID)
+		}
+
+		content.NCCH = &CIAContentNCCH{
+			Encrypted: ncch.Encrypted,
 		}
 
 		if content.Index == 0x0000 && ncch.ExeFS != nil {
