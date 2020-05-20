@@ -36,6 +36,7 @@ type CIATicket struct {
 // CIATMD describes the TMD embedded in a CIA file.
 type CIATMD struct {
 	Legit        bool
+	Original     bool
 	TitleVersion uint16
 }
 
@@ -289,6 +290,7 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 		},
 		TMD: CIATMD{
 			Legit:        tmd.Legit,
+			Original:     tmd.Original,
 			TitleVersion: tmd.TitleVersion,
 		},
 		Contents: contents,

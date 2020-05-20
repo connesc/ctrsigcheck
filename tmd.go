@@ -14,6 +14,7 @@ import (
 // TMD describes a TMD structure.
 type TMD struct {
 	Legit        bool
+	Original     bool
 	TitleID      Hex64
 	TitleVersion uint16
 	Contents     []TMDContent
@@ -78,6 +79,8 @@ func CheckTMD(input io.Reader) (*TMD, error) {
 	}
 
 	contents := make([]TMDContent, 0, contentCount)
+	contentsModified := false
+
 	for infoIndex := 0; infoIndex < 64; infoIndex++ {
 		infoRecord := contentInfoRecords[infoIndex*0x24 : (infoIndex+1)*0x24]
 
@@ -91,6 +94,7 @@ func CheckTMD(input io.Reader) (*TMD, error) {
 		}
 
 		chunkRecords := contentChunkRecords[0x30*firstChunk : 0x30*(firstChunk+count)]
+		chunkRecordsModified := false
 
 		if !bytes.Equal(sha256Hash(chunkRecords), infoRecord[0x04:0x24]) {
 			return nil, fmt.Errorf("tmd: invalid hash for content chunk records %d to %d", firstChunk, firstChunk+count-1)
@@ -109,20 +113,38 @@ func CheckTMD(input io.Reader) (*TMD, error) {
 				return nil, fmt.Errorf("tmd: content index must be less than 0x%04x, got 0x%04x", 0x2000, contentIndex)
 			}
 
+			encrypted := contentType&0x0001 != 0
+			optional := contentType&0x4000 != 0
+
 			contents = append(contents, TMDContent{
 				ID:        Hex32(contentID),
 				Index:     Hex16(contentIndex),
 				Type:      Hex16(contentType),
 				Size:      contentSize,
 				Hash:      contentHash,
-				Encrypted: contentType&0x0001 != 0,
-				Optional:  contentType&0x4000 != 0,
+				Encrypted: encrypted,
+				Optional:  optional,
 			})
+
+			if !legit && !encrypted {
+				binary.BigEndian.PutUint16(chunkRecord[0x6:], contentType^0x0001)
+				chunkRecordsModified = true
+			}
+		}
+
+		if chunkRecordsModified {
+			copy(infoRecord[0x04:0x24], sha256Hash(chunkRecords))
+			contentsModified = true
 		}
 	}
 
 	if len(contents) < contentCount {
 		return nil, fmt.Errorf("tmd: content chunk records are fewer than expected: %d < %d", len(contents), contentCount)
+	}
+
+	if contentsModified {
+		copy(header[0xa4:0xc4], sha256Hash(contentInfoRecords))
+		legit = rsa.VerifyPKCS1v15(&Certs.Retail.TMD.PublicKey, crypto.SHA256, sha256Hash(header), signature) == nil
 	}
 
 	certsTrailer := true
@@ -156,6 +178,7 @@ func CheckTMD(input io.Reader) (*TMD, error) {
 
 	return &TMD{
 		Legit:        legit,
+		Original:     legit && !contentsModified,
 		TitleID:      Hex64(titleID),
 		TitleVersion: titleVersion,
 		Contents:     contents,
