@@ -15,7 +15,7 @@ func main() {
 	output.SetEscapeHTML(false)
 
 	if len(os.Args) <= 1 {
-		processFile(os.Stdin, output)
+		processFile(nil, os.Stdin, output)
 		return
 	}
 
@@ -25,16 +25,25 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Unable to open CIA: %v\n", err)
 			os.Exit(1)
 		}
+		defer file.Close()
 
-		processFile(file, output)
+		processFile(&filename, file, output)
 	}
 }
 
-func processFile(input io.Reader, output *json.Encoder) {
-	info, err := ctrsigcheck.CheckCIA(input)
+type ciaFile struct {
+	File *string
+	*ctrsigcheck.CIA
+}
+
+func processFile(file *string, input io.Reader, output *json.Encoder) {
+	cia, err := ctrsigcheck.CheckCIA(input)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to check CIA: %v\n", err)
 		os.Exit(2)
 	}
-	output.Encode(info)
+	output.Encode(ciaFile{
+		File: file,
+		CIA:  cia,
+	})
 }
