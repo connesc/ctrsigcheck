@@ -3,7 +3,7 @@
 [![go.dev reference](https://img.shields.io/badge/go.dev-reference-007d9c)](https://pkg.go.dev/github.com/connesc/ctrsigcheck)
 [![Go Report Card](https://goreportcard.com/badge/github.com/connesc/ctrsigcheck)](https://goreportcard.com/report/github.com/connesc/ctrsigcheck)
 [![GitHub release](https://img.shields.io/github/v/release/connesc/ctrsigcheck)](https://github.com/connesc/ctrsigcheck/releases/latest)
-[![License](https://img.shields.io/github/license/connesc/ctrsigcheck)](https://github.com/connesc/ctrsigcheck/blob/master/LICENSE.md)
+[![License](https://img.shields.io/github/license/connesc/ctrsigcheck)](LICENSE)
 
 Parse and verify various file formats used by the Nintendo 3DS, also known as CTR.
 
