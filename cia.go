@@ -10,6 +10,8 @@ import (
 	"io"
 	"io/ioutil"
 
+	"github.com/connesc/cipherio"
+
 	"github.com/connesc/ctrsigcheck/ctrutil"
 )
 
@@ -217,7 +219,7 @@ func CheckCIA(input io.Reader) (*CIA, error) {
 			}
 			contentIV := make([]byte, contentCipher.BlockSize())
 			binary.BigEndian.PutUint16(contentIV, uint16(content.Index))
-			data = ctrutil.NewCipherReader(data, cipher.NewCBCDecrypter(contentCipher, contentIV))
+			data = cipherio.NewBlockReader(data, cipher.NewCBCDecrypter(contentCipher, contentIV))
 		}
 
 		hash := sha256.New()
